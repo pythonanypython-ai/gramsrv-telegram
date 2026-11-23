@@ -11,24 +11,21 @@ permissions:
 
 jobs:
   build-release:
-    name: Build Voxa 64-bit Release APK
+    name: Build Voxa ARM64 Release APK
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
     steps:
-      # Free disk space
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
           df -h
 
-      # Checkout source
       - name: Checkout repository and submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -36,11 +33,9 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # Android SDK
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      # Install build dependencies
       - name: Install Android SDK, NDK and CMake
         shell: bash
         run: |
@@ -51,7 +46,6 @@ jobs:
             "ndk;27.2.12479018" \
             "cmake;3.22.1"
 
-      # Force ARM64 in both Gradle modules
       - name: Configure ARM64-only native build
         shell: bash
         run: |
@@ -59,7 +53,7 @@ jobs:
           from pathlib import Path
           import re
 
-          # Application module
+          # Configure application module
           app_path = Path("TMessagesProj_App/build.gradle")
 
           if not app_path.exists():
@@ -78,7 +72,7 @@ jobs:
 
           app_path.write_text(app, encoding="utf-8")
 
-          # Native library module
+          # Configure native module
           native_path = Path("TMessagesProj/build.gradle")
 
           if not native_path.exists():
@@ -110,28 +104,32 @@ jobs:
           native_path.write_text(native, encoding="utf-8")
 
           # Verify configuration
-          print("Application ABI filters:")
+          print("Application ABI configuration:")
           for line in app.splitlines():
               if "abiFilters" in line:
                   print(line.strip())
                   if "arm64-v8a" not in line:
                       raise SystemExit("Unexpected application ABI")
 
-          print("Native module ABI filters:")
+          print("Native module ABI configuration:")
           for line in native.splitlines():
               if "abiFilters" in line:
                   print(line.strip())
                   if "arm64-v8a" not in line:
                       raise SystemExit("Unexpected native ABI")
 
-          print("ARM64-only configuration completed.")
+          print("ARM64 configuration completed.")
           PY
 
-      # Build Release APK
-      - name: Build signed ARM64 Release APK
+      - name: Build Voxa ARM64 Release APK
         shell: bash
         run: |
+          set -euo pipefail
+
           chmod +x ./gradlew
+
+          # Record build start time to avoid selecting an old APK
+          echo "BUILD_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
           ./gradlew \
             --no-daemon \
@@ -139,71 +137,119 @@ jobs:
             -Pandroid.injected.build.abi=arm64-v8a \
             :TMessagesProj_App:assembleAfatRelease
 
-      # Locate APK and verify architecture
-      - name: Locate and verify ARM64 APK
+      - name: Search entire project for generated APK
         id: verify_apk
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Searching for APK files..."
+          echo "========================================"
+          echo "Searching the ENTIRE repository for APK"
+          echo "========================================"
 
-          APK="$(find TMessagesProj_App/build \
+          echo "Build started at: $BUILD_START_EPOCH"
+
+          # Search every directory in the repository.
+          # Only accept APKs created or modified during this build.
+          APK="$(find . \
             -type f \
-            -path "*/outputs/apk/*" \
-            -name "*.apk" \
+            -iname "*.apk" \
+            -not -path "./.git/*" \
+            -newermt "@${BUILD_START_EPOCH}" \
             -size +0c \
-            -print | sort | head -n 1 || true)"
+            -print0 |
+            xargs -0 -r ls -t 2>/dev/null |
+            head -n 1 || true)"
 
           if [ -z "$APK" ]; then
-            echo "::error::No APK file found."
+            echo "::error::No newly generated APK was found anywhere in the repository."
 
-            echo "Available build outputs:"
-            find TMessagesProj_App/build/outputs \
-              -type f -print || true
+            echo ""
+            echo "========== ALL APK FILES =========="
+            find . \
+              -type f \
+              -iname "*.apk" \
+              -not -path "./.git/*" \
+              -print || true
+
+            echo ""
+            echo "========== OUTPUT METADATA =========="
+            find . \
+              -type f \
+              -name "output-metadata.json" \
+              -not -path "./.git/*" \
+              -print || true
+
+            echo ""
+            echo "========== BUILD OUTPUT DIRECTORIES =========="
+            find . \
+              -type d \
+              \( -name "outputs" -o -name "apk" \) \
+              -not -path "./.git/*" \
+              -print || true
+
+            echo ""
+            echo "========== GRADLE BUILD FILES =========="
+            find . \
+              -type f \
+              \( -name "*.apk" -o -name "*.aab" \) \
+              -not -path "./.git/*" \
+              -print || true
 
             exit 1
           fi
 
-          echo "APK found: $APK"
+          echo ""
+          echo "APK FOUND:"
+          echo "$APK"
 
-          # Verify APK integrity
+          echo ""
+          echo "========== APK SIZE =========="
+          ls -lh "$APK"
+
+          echo ""
+          echo "========== APK INTEGRITY =========="
           unzip -t "$APK" > /dev/null
           echo "APK integrity: OK"
 
-          # Extract native ABIs
+          echo ""
+          echo "========== NATIVE ABI CHECK =========="
+
           mapfile -t ABIS < <(
             unzip -Z1 "$APK" |
             awk -F/ '$1 == "lib" && NF >= 3 {print $2}' |
             sort -u
           )
 
-          echo "Native ABIs inside APK:"
+          if [ "${#ABIS[@]}" -eq 0 ]; then
+            echo "::error::No native libraries found inside APK."
+            exit 1
+          fi
+
           printf '%s\n' "${ABIS[@]}"
 
-          # Require ARM64
           if ! printf '%s\n' "${ABIS[@]}" | grep -Fxq "arm64-v8a"; then
             echo "::error::ARM64 native libraries not found."
             exit 1
           fi
 
-          # Reject every other ABI
           for ABI in "${ABIS[@]}"; do
             if [ "$ABI" != "arm64-v8a" ]; then
-              echo "::error::Unexpected ABI: $ABI"
+              echo "::error::Unexpected architecture found: $ABI"
               exit 1
             fi
           done
 
-          # Checksum
+          echo ""
+          echo "========== SHA256 =========="
           sha256sum "$APK"
 
-          # Export APK location
+          # Export exact APK path for artifact upload
           echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
 
-          echo "ARM64 APK verification successful."
+          echo ""
+          echo "APK search and verification completed successfully."
 
-      # Upload APK
       - name: Upload Voxa ARM64 APK
         uses: actions/upload-artifact@v4
         with:
