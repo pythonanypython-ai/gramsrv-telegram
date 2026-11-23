@@ -834,7 +834,7 @@ public class ManageLinksActivity extends BaseFragment implements NotificationCen
                     linkActionView.setCanEdit(adminId == getAccountInstance().getUserConfig().clientUserId);
                     if (isPublic && adminId == getAccountInstance().getUserConfig().clientUserId) {
                         if (info != null) {
-                            linkActionView.setLink("https://telesrv.net/" + ChatObject.getPublicUsername(currentChat));
+                            linkActionView.setLink("https://voxa.ir/" + ChatObject.getPublicUsername(currentChat));
                             linkActionView.setUsers(0, null);
                             linkActionView.hideRevokeOption(true);
                         }
@@ -1099,7 +1099,7 @@ public class ManageLinksActivity extends BaseFragment implements NotificationCen
                         try {
                             if (invite.link == null) return;
                             android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                            android.content.ClipData clip = android.content.ClipData.newPlainText("label", invite.link);
+                            android.content.ClipData clip = android.content.ClipData.newPlainText("label", org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link));
                             clipboard.setPrimaryClip(clip);
                             BulletinFactory.createCopyLinkBulletin(ManageLinksActivity.this).show();
                         } catch (Exception e) {
@@ -1109,7 +1109,7 @@ public class ManageLinksActivity extends BaseFragment implements NotificationCen
                     options.add(R.drawable.msg_share, getString(R.string.ShareLink), () -> {
                         try {
                             if (invite.link == null) return;
-                            showDialog(new ShareAlert(getContext(), null, invite.link, false, invite.link, false, getResourceProvider()) {
+                            showDialog(new ShareAlert(getContext(), null, org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link), false, org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link), false, getResourceProvider()) {
                                 @Override
                                 protected void onSend(LongSparseArray<TLRPC.Dialog> dids, int count, TLRPC.TL_forumTopic topic, boolean showToast) {
                                     if (!showToast) return;
@@ -1364,9 +1364,9 @@ public class ManageLinksActivity extends BaseFragment implements NotificationCen
             } else if (invite.link.startsWith("https://telesrv.net/joinchat/")) {
                 titleView.setText(invite.link.substring("https://telesrv.net/joinchat/".length()));
             } else if (invite.link.startsWith("https://")) {
-                titleView.setText(invite.link.substring("https://".length()));
+                titleView.setText(org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link).substring("https://".length()));
             } else {
-                titleView.setText(invite.link);
+                titleView.setText(org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link));
             }
 
             String joinedString = "";

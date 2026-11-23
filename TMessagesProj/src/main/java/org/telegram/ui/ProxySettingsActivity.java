@@ -571,13 +571,13 @@ public class ProxySettingsActivity extends BaseFragment {
                     params.append("port=").append(URLEncoder.encode(port, "UTF-8"));
                 }
                 if (currentType == ProxySettings.Type.MTPROTO) {
-                    url = "https://telesrv.net/proxy?";
+                    url = "https://voxa.ir/proxy?";
                     if (params.length() != 0) {
                         params.append("&");
                     }
                     params.append("secret=").append(URLEncoder.encode(secret, "UTF-8"));
                 } else {
-                    url = "https://telesrv.net/socks?";
+                    url = "https://voxa.ir/socks?";
                     if (!TextUtils.isEmpty(user)) {
                         if (params.length() != 0) {
                             params.append("&");

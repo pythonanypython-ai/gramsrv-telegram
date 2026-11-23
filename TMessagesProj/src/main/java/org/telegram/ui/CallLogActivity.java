@@ -1795,7 +1795,7 @@ public class CallLogActivity extends BaseFragment implements NotificationCenter.
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req2, (res2, err2) -> AndroidUtilities.runOnUIThread(() -> {
 					if (res2 instanceof TL_phone.exportedGroupCallInvite) {
 						final TL_phone.exportedGroupCallInvite r = (TL_phone.exportedGroupCallInvite) res2;
-						final String newLink = r.link;
+						final String newLink = org.telegram.messenger.VoxaLinks.toVoxaLink(r.link);
 
 						currentLink[0] = newLink;
 						String formattedLink2 = newLink;
@@ -1983,7 +1983,7 @@ public class CallLogActivity extends BaseFragment implements NotificationCenter.
 					final TLRPC.TL_inputGroupCall inputGroupCall = new TLRPC.TL_inputGroupCall();
 					inputGroupCall.id = groupCall.id;
 					inputGroupCall.access_hash = groupCall.access_hash;
-					showCallLinkSheet(context, currentAccount, inputGroupCall, groupCall.invite_link, resourceProvider, true, true);
+					showCallLinkSheet(context, currentAccount, inputGroupCall, org.telegram.messenger.VoxaLinks.toVoxaLink(groupCall.invite_link), resourceProvider, true, true);
 
 					AndroidUtilities.runOnUIThread(done);
 				}
@@ -2001,7 +2001,7 @@ public class CallLogActivity extends BaseFragment implements NotificationCenter.
 						progressDialog.dismiss();
 
 						final TL_phone.exportedGroupCallInvite r2 = (TL_phone.exportedGroupCallInvite) res2;
-						showCallLinkSheet(context, currentAccount, req2.call, r2.link, resourceProvider, true, true);
+						showCallLinkSheet(context, currentAccount, req2.call, org.telegram.messenger.VoxaLinks.toVoxaLink(r2.link), resourceProvider, true, true);
 					} else {
 						progressDialog.dismiss();
 					}

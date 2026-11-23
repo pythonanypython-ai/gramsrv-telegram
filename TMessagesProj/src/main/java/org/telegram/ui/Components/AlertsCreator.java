@@ -9164,7 +9164,7 @@ public class AlertsCreator {
                     }
                     sheet.dismiss();
 
-                    SendMessagesHelper.getInstance(currentAccount).sendMessage(SendMessagesHelper.SendMessageParams.of(groupCall.invite_link, dialogId));
+                    SendMessagesHelper.getInstance(currentAccount).sendMessage(SendMessagesHelper.SendMessageParams.of(org.telegram.messenger.VoxaLinks.toVoxaLink(groupCall.invite_link), dialogId));
 
                     BaseFragment lastFragment = LaunchActivity.getSafeLastFragment();
                     if (lastFragment != null && !(lastFragment instanceof ChatActivity && ((ChatActivity) lastFragment).getDialogId() == dialogId && ((ChatActivity) lastFragment).getChatMode() == ChatActivity.MODE_DEFAULT)) {
@@ -9185,7 +9185,7 @@ public class AlertsCreator {
                     sheet.dismiss();
                     VoIPHelper.joinConference(LaunchActivity.instance, currentAccount, inputGroupCall, false, r.call, null);
 
-                    SendMessagesHelper.getInstance(currentAccount).sendMessage(SendMessagesHelper.SendMessageParams.of(r.call.invite_link, dialogId));
+                    SendMessagesHelper.getInstance(currentAccount).sendMessage(SendMessagesHelper.SendMessageParams.of(org.telegram.messenger.VoxaLinks.toVoxaLink(r.call.invite_link), dialogId));
                 } else if (err != null) {
                     BulletinFactory.of(sheet.topBulletinContainer, resourcesProvider)
                         .showForError(err);

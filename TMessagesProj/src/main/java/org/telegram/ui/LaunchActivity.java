@@ -1971,10 +1971,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     return false;
                                 case "http":
                                 case "https": {
-                                    String host = data.getHost().toLowerCase();
+                                    String host = data.getHost() != null ? data.getHost().toLowerCase(java.util.Locale.US) : "";
                                     Matcher prefixMatcher = PREFIX_T_ME_PATTERN.matcher(host);
                                     boolean isPrefix = prefixMatcher.find();
-                                    if (host.equals("telesrv.net") || isPrefix) {
+                                    if (org.telegram.messenger.VoxaLinks.isLinkHost(host) || isPrefix) {
                                         if (isPrefix) {
                                             data = Uri.parse("https://telesrv.net/" + prefixMatcher.group(1) + (TextUtils.isEmpty(data.getPath()) ? "" : data.getPath()) + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
                                         }

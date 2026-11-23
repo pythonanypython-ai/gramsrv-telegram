@@ -11,9 +11,9 @@ public class ChannelBoostUtilities {
         TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialogId);
         String username = ChatObject.getPublicUsername(chat);
         if (!TextUtils.isEmpty(username)) {
-            return "https://telesrv.net/boost/" + ChatObject.getPublicUsername(chat);
+            return "https://voxa.ir/boost/" + ChatObject.getPublicUsername(chat);
         } else {
-            return "https://telesrv.net/boost/?c=" + -dialogId;
+            return "https://voxa.ir/boost/?c=" + -dialogId;
         }
     }
 }

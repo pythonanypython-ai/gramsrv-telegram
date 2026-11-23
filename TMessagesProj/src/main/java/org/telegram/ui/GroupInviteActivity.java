@@ -130,7 +130,7 @@ public class GroupInviteActivity extends BaseFragment implements NotificationCen
                 }
                 try {
                     android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                    android.content.ClipData clip = android.content.ClipData.newPlainText("label", invite.link);
+                    android.content.ClipData clip = android.content.ClipData.newPlainText("label", org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link));
                     clipboard.setPrimaryClip(clip);
                     BulletinFactory.createCopyLinkBulletin(this).show();
                 } catch (Exception e) {
@@ -143,7 +143,7 @@ public class GroupInviteActivity extends BaseFragment implements NotificationCen
                 try {
                     Intent intent = new Intent(Intent.ACTION_SEND);
                     intent.setType("text/plain");
-                    intent.putExtra(Intent.EXTRA_TEXT, invite.link);
+                    intent.putExtra(Intent.EXTRA_TEXT, org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link));
                     getParentActivity().startActivityForResult(Intent.createChooser(intent, LocaleController.getString(R.string.InviteToGroupByLink)), 500);
                 } catch (Exception e) {
                     FileLog.e(e);
@@ -284,7 +284,7 @@ public class GroupInviteActivity extends BaseFragment implements NotificationCen
                     break;
                 case 2:
                     TextBlockCell textBlockCell = (TextBlockCell) holder.itemView;
-                    textBlockCell.setText(invite != null ? invite.link : "error", false);
+                    textBlockCell.setText(invite != null ? org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link) : "error", false);
                     break;
             }
         }

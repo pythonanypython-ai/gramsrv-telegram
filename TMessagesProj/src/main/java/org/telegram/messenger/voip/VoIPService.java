@@ -2241,7 +2241,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			groupCall.call.can_change_join_muted = true;
 			groupCall.call.rtmp_stream = isRtmpStream;
 			if (joinConference instanceof TLRPC.TL_inputGroupCallSlug) {
-				groupCall.call.invite_link = "https://telesrv.net/call/" + joinConference.slug;
+				groupCall.call.invite_link = "https://voxa.ir/call/" + joinConference.slug;
 			}
 			groupCall.chatId = 0;
 			groupCall.currentAccount = AccountInstance.getInstance(currentAccount);
@@ -2414,7 +2414,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 										dreq.video = inviteUsersToConferenceVideo;
 										ConnectionsManager.getInstance(currentAccount).sendRequest(dreq, null);
 
-										final String link = r2.link;
+										final String link = org.telegram.messenger.VoxaLinks.toVoxaLink(r2.link);
 										final int totalCount = inviteUsersToConference.size();
 										final AtomicInteger invitedCount = new AtomicInteger(0);
 										final HashSet<Long> restrictedUsers = new HashSet<>();
@@ -2505,7 +2505,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 								}));
 							}
 							if (inviteUsers != null) {
-								final String link = groupCall.call.invite_link;
+								final String link = org.telegram.messenger.VoxaLinks.toVoxaLink(groupCall.call.invite_link);
 								final int totalCount = inviteUsers.length;
 								final AtomicInteger invitedCount = new AtomicInteger(0);
 								final HashSet<Long> restrictedUsers = new HashSet<>();

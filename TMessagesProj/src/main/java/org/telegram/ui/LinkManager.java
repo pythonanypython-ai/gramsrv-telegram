@@ -121,7 +121,7 @@ public class LinkManager {
         if (host == null) return false;
         final Matcher prefixMatcher = LaunchActivity.PREFIX_T_ME_PATTERN.matcher(host.toLowerCase());
         final boolean isPrefix = prefixMatcher.find();
-        if (!"telesrv.net".equalsIgnoreCase(host) && !isPrefix)
+        if (!org.telegram.messenger.VoxaLinks.isLinkHost(host) && !isPrefix)
             return false;
 
         if (isPrefix) {
@@ -1810,10 +1810,10 @@ public class LinkManager {
                 case "http":
                 case "https": {
                     if (path.isEmpty()) return false;
-                    String host = uri.getHost().toLowerCase();
+                    String host = uri.getHost() != null ? uri.getHost().toLowerCase(java.util.Locale.US) : "";
                     Matcher prefixMatcher = LaunchActivity.PREFIX_T_ME_PATTERN.matcher(host);
                     boolean isPrefix = prefixMatcher.find();
-                    if (host.equals("telesrv.net") || isPrefix) {
+                    if (org.telegram.messenger.VoxaLinks.isLinkHost(host) || isPrefix) {
                         ArrayList<String> segments = new ArrayList<>(uri.getPathSegments());
                         if (segments.size() > 0 && segments.get(0).equals("s")) {
                             segments.remove(0);
