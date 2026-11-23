@@ -1,5 +1,5 @@
 
-name: Voxa Android Release (arm64)
+name: Voxa Android Release - ARM64 ONLY
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-release:
-    name: Build Voxa Release APK (arm64-v8a)
+    name: Build Voxa 64-bit Release APK
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -22,13 +22,13 @@ jobs:
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
           df -h
 
-      # Checkout repository
+      # Checkout source
       - name: Checkout repository and submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # Java
+      # Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -40,7 +40,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      # Install required packages
+      # Install build dependencies
       - name: Install Android SDK, NDK and CMake
         shell: bash
         run: |
@@ -51,53 +51,84 @@ jobs:
             "ndk;27.2.12479018" \
             "cmake;3.22.1"
 
-      # Restrict native build to ARM64
-      - name: Restrict build to arm64-v8a only
+      # Force ARM64 in both Gradle modules
+      - name: Configure ARM64-only native build
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
-          path = Path("TMessagesProj_App/build.gradle")
+          # Application module
+          app_path = Path("TMessagesProj_App/build.gradle")
 
-          if not path.exists():
-              raise SystemExit("TMessagesProj_App/build.gradle was not found")
+          if not app_path.exists():
+              raise SystemExit("Application build.gradle not found")
 
-          content = path.read_text(encoding="utf-8")
+          app = app_path.read_text(encoding="utf-8")
 
-          pattern = (
-              r'abiFilters\s+'
-              r'"armeabi-v7a"\s*,\s*'
-              r'"arm64-v8a"\s*,\s*'
-              r'"x86"\s*,\s*'
-              r'"x86_64"'
+          app, app_count = re.subn(
+              r'(?m)^(\s*)abiFilters\s+.*$',
+              r'\1abiFilters "arm64-v8a"',
+              app
           )
 
-          updated, count = re.subn(
-              pattern,
-              'abiFilters "arm64-v8a"',
-              content
+          if app_count == 0:
+              raise SystemExit("No ABI filters found in application module")
+
+          app_path.write_text(app, encoding="utf-8")
+
+          # Native library module
+          native_path = Path("TMessagesProj/build.gradle")
+
+          if not native_path.exists():
+              raise SystemExit("Native module build.gradle not found")
+
+          native = native_path.read_text(encoding="utf-8")
+
+          native, native_count = re.subn(
+              r'(?m)^(\s*)abiFilters\s+.*$',
+              r'\1abiFilters "arm64-v8a"',
+              native
           )
 
-          if count:
-              path.write_text(updated, encoding="utf-8")
-              print(f"Updated {count} ABI filter(s).")
-          elif 'abiFilters "arm64-v8a"' in content:
-              print("ARM64 ABI filter is already configured.")
-          else:
-              raise SystemExit("Could not locate the expected ABI filter.")
+          if native_count == 0:
+              marker = "    defaultConfig {\n"
 
-          print("Current ABI filters:")
-          for line in updated.splitlines():
+              if marker not in native:
+                  raise SystemExit("Native defaultConfig block not found")
+
+              native = native.replace(
+                  marker,
+                  marker +
+                  '        ndk {\n'
+                  '            abiFilters "arm64-v8a"\n'
+                  '        }\n',
+                  1
+              )
+
+          native_path.write_text(native, encoding="utf-8")
+
+          # Verify configuration
+          print("Application ABI filters:")
+          for line in app.splitlines():
               if "abiFilters" in line:
                   print(line.strip())
-                  if "armeabi-v7a" in line or '"x86"' in line or '"x86_64"' in line:
-                      raise SystemExit("Non-ARM64 ABI filter still exists.")
+                  if "arm64-v8a" not in line:
+                      raise SystemExit("Unexpected application ABI")
+
+          print("Native module ABI filters:")
+          for line in native.splitlines():
+              if "abiFilters" in line:
+                  print(line.strip())
+                  if "arm64-v8a" not in line:
+                      raise SystemExit("Unexpected native ABI")
+
+          print("ARM64-only configuration completed.")
           PY
 
-      # Build APK
-      - name: Build signed Release APK
+      # Build Release APK
+      - name: Build signed ARM64 Release APK
         shell: bash
         run: |
           chmod +x ./gradlew
@@ -105,50 +136,42 @@ jobs:
           ./gradlew \
             --no-daemon \
             --stacktrace \
+            -Pandroid.injected.build.abi=arm64-v8a \
             :TMessagesProj_App:assembleAfatRelease
 
-      # Find and verify APK
-      - name: Locate and verify APK output
+      # Locate APK and verify architecture
+      - name: Locate and verify ARM64 APK
         id: verify_apk
         shell: bash
         run: |
           set -euo pipefail
 
-          OUTPUT_DIR="TMessagesProj_App/build/outputs"
+          echo "Searching for APK files..."
 
-          echo "Searching for generated APK files..."
+          APK="$(find TMessagesProj_App/build \
+            -type f \
+            -path "*/outputs/apk/*" \
+            -name "*.apk" \
+            -size +0c \
+            -print | sort | head -n 1 || true)"
 
-          if [ ! -d "$OUTPUT_DIR" ]; then
-            echo "::error::APK output directory does not exist."
-            find TMessagesProj_App/build -maxdepth 5 -type f -print || true
-            exit 1
-          fi
+          if [ -z "$APK" ]; then
+            echo "::error::No APK file found."
 
-          mapfile -t APK_FILES < <(
-            find "$OUTPUT_DIR" \
-              -type f \
-              -name "*.apk" \
-              -size +0c \
-              -print | sort
-          )
-
-          if [ "${#APK_FILES[@]}" -eq 0 ]; then
-            echo "::error::No APK file was generated."
             echo "Available build outputs:"
-            find "$OUTPUT_DIR" -type f -print || true
+            find TMessagesProj_App/build/outputs \
+              -type f -print || true
+
             exit 1
           fi
 
-          APK="${APK_FILES[0]}"
+          echo "APK found: $APK"
 
-          echo "Found APK: $APK"
-
-          # Check APK archive integrity
+          # Verify APK integrity
           unzip -t "$APK" > /dev/null
+          echo "APK integrity: OK"
 
-          echo "APK archive integrity: OK"
-
-          # Verify native ABI
+          # Extract native ABIs
           mapfile -t ABIS < <(
             unzip -Z1 "$APK" |
             awk -F/ '$1 == "lib" && NF >= 3 {print $2}' |
@@ -158,31 +181,33 @@ jobs:
           echo "Native ABIs inside APK:"
           printf '%s\n' "${ABIS[@]}"
 
+          # Require ARM64
           if ! printf '%s\n' "${ABIS[@]}" | grep -Fxq "arm64-v8a"; then
-            echo "::error::ARM64 native libraries were not found."
+            echo "::error::ARM64 native libraries not found."
             exit 1
           fi
 
+          # Reject every other ABI
           for ABI in "${ABIS[@]}"; do
             if [ "$ABI" != "arm64-v8a" ]; then
-              echo "::error::Unexpected ABI found: $ABI"
+              echo "::error::Unexpected ABI: $ABI"
               exit 1
             fi
           done
 
-          # Generate checksum
+          # Checksum
           sha256sum "$APK"
 
-          # Pass actual APK path to upload step
-          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          # Export APK location
+          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
 
-          echo "APK verification completed successfully."
+          echo "ARM64 APK verification successful."
 
-      # Upload final APK
-      - name: Upload Release APK
+      # Upload APK
+      - name: Upload Voxa ARM64 APK
         uses: actions/upload-artifact@v4
         with:
           name: voxa-release-apk-arm64
-          path: ${{ steps.verify_apk.outputs.path }}
+          path: ${{ steps.verify_apk.outputs.apk_path }}
           if-no-files-found: error
           retention-days: 30
