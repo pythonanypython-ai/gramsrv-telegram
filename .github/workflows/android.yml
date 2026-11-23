@@ -1,3 +1,4 @@
+
 name: Voxa Android Release - ARM64 ONLY
 
 on:
@@ -11,20 +12,29 @@ permissions:
 jobs:
   build-release:
     name: Build Voxa ARM64 Release APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 120
 
     steps:
+      # ==========================================
+      # 1. Free disk space
+      # ==========================================
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
           df -h
 
+      # ==========================================
+      # 2. Checkout repository
+      # ==========================================
       - name: Checkout repository and submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # ==========================================
+      # 3. Setup Java
+      # ==========================================
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -32,108 +42,283 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-
-      - name: Install Android SDK, NDK and CMake
+      # ==========================================
+      # 4. Use preinstalled Android SDK / NDK
+      # ==========================================
+      - name: Prepare Android SDK (preinstalled)
+        timeout-minutes: 5
         shell: bash
         run: |
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "ndk;27.2.12479018" \
-            "cmake;3.22.1"
+          set -euo pipefail
 
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          NDK_VERSION="27.3.13750724"
+          CMAKE_VERSION="3.22.1"
+
+          echo "========== ANDROID SDK =========="
+
+          if [ ! -d "$SDK" ]; then
+            echo "::error::Android SDK not found: $SDK"
+            exit 1
+          fi
+
+          echo "Android SDK: $SDK"
+
+          # Verify preinstalled packages.
+          REQUIRED_PATHS=(
+            "$SDK/platform-tools"
+            "$SDK/platforms/android-36"
+            "$SDK/build-tools/36.0.0"
+            "$SDK/ndk/$NDK_VERSION"
+            "$SDK/cmake/$CMAKE_VERSION"
+          )
+
+          for PACKAGE in "${REQUIRED_PATHS[@]}"; do
+            if [ ! -d "$PACKAGE" ]; then
+              echo "::error::Required Android package is missing: $PACKAGE"
+              exit 1
+            fi
+
+            echo "[OK] $PACKAGE"
+          done
+
+          # Explicitly select the preinstalled NDK.
+          {
+            echo "ANDROID_HOME=$SDK"
+            echo "ANDROID_SDK_ROOT=$SDK"
+            echo "ANDROID_NDK=$SDK/ndk/$NDK_VERSION"
+            echo "ANDROID_NDK_HOME=$SDK/ndk/$NDK_VERSION"
+            echo "ANDROID_NDK_ROOT=$SDK/ndk/$NDK_VERSION"
+            echo "ANDROID_NDK_VERSION=$NDK_VERSION"
+          } >> "$GITHUB_ENV"
+
+          echo "========== NDK VERSION =========="
+          "$SDK/ndk/$NDK_VERSION/ndk-build" --version
+
+          echo "========== CMAKE VERSION =========="
+          "$SDK/cmake/$CMAKE_VERSION/bin/cmake" --version
+
+          echo "========== SDK STATUS =========="
+          java -version
+          df -h
+
+          echo "Android SDK preparation completed."
+
+      # ==========================================
+      # 5. Configure ARM64-only native build
+      # ==========================================
       - name: Configure ARM64-only native build
         shell: bash
         run: |
+          set -euo pipefail
+
           python3 - <<'PY'
           from pathlib import Path
           import re
 
+          APP_PATH = Path("TMessagesProj_App/build.gradle")
+          NATIVE_PATH = Path("TMessagesProj/build.gradle")
+
+          OLD_NDK = "27.2.12479018"
+          NEW_NDK = "27.3.13750724"
+
+          # ------------------------------------------
+          # Verify required Gradle files
+          # ------------------------------------------
+          for path in (APP_PATH, NATIVE_PATH):
+              if not path.exists():
+                  raise SystemExit(f"Required file not found: {path}")
+
+          # ------------------------------------------
+          # Update NDK version references throughout
+          # Gradle configuration files.
+          # ------------------------------------------
+          updated_files = 0
+          total_replacements = 0
+
+          candidates = set(Path(".").rglob("*.gradle"))
+          candidates.update(Path(".").rglob("*.gradle.kts"))
+          candidates.update(Path(".").rglob("gradle.properties"))
+          candidates.update(Path(".").rglob("*.toml"))
+
+          for path in candidates:
+              if any(part in {
+                  ".git", ".gradle", "build",
+                  "node_modules", "vendor"
+              } for part in path.parts):
+                  continue
+
+              if not path.is_file():
+                  continue
+
+              content = path.read_text(encoding="utf-8")
+
+              if OLD_NDK not in content:
+                  continue
+
+              count = content.count(OLD_NDK)
+              content = content.replace(OLD_NDK, NEW_NDK)
+
+              path.write_text(content, encoding="utf-8")
+
+              updated_files += 1
+              total_replacements += count
+
+              print(f"Updated NDK version: {path}")
+
+          print(
+              f"NDK references updated: "
+              f"{total_replacements} in {updated_files} files"
+          )
+
+          # ------------------------------------------
           # Configure application module
-          app_path = Path("TMessagesProj_App/build.gradle")
-
-          if not app_path.exists():
-              raise SystemExit("Application build.gradle not found")
-
-          app = app_path.read_text(encoding="utf-8")
+          # ------------------------------------------
+          app = APP_PATH.read_text(encoding="utf-8")
 
           app, app_count = re.subn(
-              r'(?m)^(\s*)abiFilters\s+.*$',
+              r'(?m)^([ \t]*)abiFilters[ \t]+.*$',
               r'\1abiFilters "arm64-v8a"',
               app
           )
+
           if app_count == 0:
-              raise SystemExit("No ABI filters found in application module")
+              raise SystemExit(
+                  "No ABI filters found in application module"
+              )
 
-          app_path.write_text(app, encoding="utf-8")
+          APP_PATH.write_text(app, encoding="utf-8")
 
+          # ------------------------------------------
           # Configure native module
-          native_path = Path("TMessagesProj/build.gradle")
+          # ------------------------------------------
+          native = NATIVE_PATH.read_text(encoding="utf-8")
 
-          if not native_path.exists():
-              raise SystemExit("Native module build.gradle not found")
-
-          native = native_path.read_text(encoding="utf-8")
           native, native_count = re.subn(
-              r'(?m)^(\s*)abiFilters\s+.*$',
+              r'(?m)^([ \t]*)abiFilters[ \t]+.*$',
               r'\1abiFilters "arm64-v8a"',
               native
           )
 
           if native_count == 0:
-              marker = "    defaultConfig {\n"
-
-              if marker not in native:
-                  raise SystemExit("Native defaultConfig block not found")
-              native = native.replace(
-                  marker,
-                  marker +
-                  '        ndk {\n'
-                  '            abiFilters "arm64-v8a"\n'
-                  '        }\n',
-                  1
+              marker = re.search(
+                  r'(?m)^([ \t]*)defaultConfig[ \t]*\{[ \t]*$',
+                  native
               )
 
-          native_path.write_text(native, encoding="utf-8")
+              if not marker:
+                  raise SystemExit(
+                      "Native defaultConfig block not found"
+                  )
 
-          # Verify configuration
-          print("Application ABI configuration:")
+              indent = marker.group(1) + "    "
+              insert_position = native.find(
+                  "\n", marker.start()
+              )
+
+              if insert_position == -1:
+                  raise SystemExit(
+                      "Could not locate defaultConfig insertion point"
+                  )
+
+              block = (
+                  f"\n{indent}ndk {{\n"
+                  f'{indent}    abiFilters "arm64-v8a"\n'
+                  f"{indent}}}\n"
+              )
+
+              native = (
+                  native[:insert_position + 1]
+                  + block
+                  + native[insert_position + 1:]
+              )
+
+          NATIVE_PATH.write_text(native, encoding="utf-8")
+
+          # ------------------------------------------
+          # Verify application ABI configuration
+          # ------------------------------------------
+          print("\n========== APPLICATION ABI ==========")
+
           for line in app.splitlines():
               if "abiFilters" in line:
                   print(line.strip())
-                  if "arm64-v8a" not in line:
-                      raise SystemExit("Unexpected application ABI")
 
-          print("Native module ABI configuration:")
+                  if "arm64-v8a" not in line:
+                      raise SystemExit(
+                          "Unexpected application ABI"
+                      )
+
+          # ------------------------------------------
+          # Verify native ABI configuration
+          # ------------------------------------------
+          print("\n========== NATIVE ABI ==========")
+
           for line in native.splitlines():
               if "abiFilters" in line:
                   print(line.strip())
-                  if "arm64-v8a" not in line:
-                      raise SystemExit("Unexpected native ABI")
 
+                  if "arm64-v8a" not in line:
+                      raise SystemExit(
+                          "Unexpected native ABI"
+                      )
+
+          # ------------------------------------------
+          # Verify NDK version references
+          # ------------------------------------------
+          print("\n========== NDK CONFIGURATION ==========")
+
+          for path in candidates:
+              if not path.is_file():
+                  continue
+
+              if any(part in {
+                  ".git", ".gradle", "build",
+                  "node_modules", "vendor"
+              } for part in path.parts):
+                  continue
+
+              try:
+                  content = path.read_text(encoding="utf-8")
+              except (UnicodeDecodeError, OSError):
+                  continue
+
+              if OLD_NDK in content:
+                  raise SystemExit(
+                      f"Old NDK version still exists in {path}"
+                  )
+
+          print(f"Selected NDK: {NEW_NDK}")
           print("ARM64 configuration completed.")
           PY
 
+      # ==========================================
+      # 6. Build Release APK
+      # ==========================================
       - name: Build Voxa ARM64 Release APK
+        timeout-minutes: 90
         shell: bash
         run: |
           set -euo pipefail
 
           chmod +x ./gradlew
 
-          # Record build start time to avoid selecting an old APK
+          # Record build start time.
           echo "BUILD_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+
+          echo "========== STARTING RELEASE BUILD =========="
 
           ./gradlew \
             --no-daemon \
             --stacktrace \
+            --console=plain \
             -Pandroid.injected.testOnly=false \
             -Pandroid.injected.build.abi=arm64-v8a \
             :TMessagesProj_App:assembleAfatRelease
 
+      # ==========================================
+      # 7. Find and verify generated APK
+      # ==========================================
       - name: Search entire project for generated APK
         id: verify_apk
         shell: bash
@@ -141,28 +326,29 @@ jobs:
           set -euo pipefail
 
           echo "========================================"
-          echo "Searching the ENTIRE repository for APK"
+          echo "Searching entire repository for APK"
           echo "========================================"
 
           echo "Build started at: $BUILD_START_EPOCH"
 
-          # Search every directory in the repository.
-          # Only accept APKs created or modified during this build.
-          APK="$(find . \
-            -type f \
-            -iname "*.apk" \
-            -not -path "./.git/*" \
-            -newermt "@${BUILD_START_EPOCH}" \
-            -size +0c \
-            -print0 |
+          APK="$(
+            find . \
+              -type f \
+              -iname "*.apk" \
+              -not -path "./.git/*" \
+              -newermt "@${BUILD_START_EPOCH}" \
+              -size +0c \
+              -print0 |
             xargs -0 -r ls -t 2>/dev/null |
-            head -n 1 || true)"
+            head -n 1 || true
+          )"
 
           if [ -z "$APK" ]; then
-            echo "::error::No newly generated APK was found anywhere in the repository."
+            echo "::error::No newly generated APK was found."
 
             echo ""
             echo "========== ALL APK FILES =========="
+
             find . \
               -type f \
               -iname "*.apk" \
@@ -171,6 +357,7 @@ jobs:
 
             echo ""
             echo "========== OUTPUT METADATA =========="
+
             find . \
               -type f \
               -name "output-metadata.json" \
@@ -179,17 +366,10 @@ jobs:
 
             echo ""
             echo "========== BUILD OUTPUT DIRECTORIES =========="
+
             find . \
               -type d \
               \( -name "outputs" -o -name "apk" \) \
-              -not -path "./.git/*" \
-              -print || true
-
-            echo ""
-            echo "========== GRADLE BUILD FILES =========="
-            find . \
-              -type f \
-              \( -name "*.apk" -o -name "*.aab" \) \
               -not -path "./.git/*" \
               -print || true
 
@@ -204,40 +384,62 @@ jobs:
           echo "========== APK SIZE =========="
           ls -lh "$APK"
 
+          # ------------------------------------------
+          # APK integrity
+          # ------------------------------------------
           echo ""
           echo "========== APK INTEGRITY =========="
+
           unzip -t "$APK" > /dev/null
+
           echo "APK integrity: OK"
 
+          # ------------------------------------------
+          # Verify android:testOnly
+          # ------------------------------------------
           echo ""
           echo "========== TEST-ONLY CHECK =========="
+
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
 
           if [ ! -x "$AAPT" ]; then
-            echo "::error::aapt was not found at: $AAPT"
+            echo "::error::aapt was not found: $AAPT"
             exit 1
           fi
 
           MANIFEST_DUMP="$(mktemp)"
-          "$AAPT" dump xmltree "$APK" AndroidManifest.xml > "$MANIFEST_DUMP"
 
-          if grep -Eiq 'android:testOnly.*(=true|0xffffffff)' "$MANIFEST_DUMP"; then
-            echo "::error::The generated APK contains android:testOnly=true."
-            grep -Ein 'android:testOnly' "$MANIFEST_DUMP" || true
+          "$AAPT" dump xmltree \
+            "$APK" AndroidManifest.xml > "$MANIFEST_DUMP"
+
+          if grep -Eiq \
+            'android:testOnly.*(=true|0xffffffff)' \
+            "$MANIFEST_DUMP"; then
+
+            echo "::error::APK contains android:testOnly=true."
+
+            grep -Ein \
+              'android:testOnly' \
+              "$MANIFEST_DUMP" || true
+
             rm -f "$MANIFEST_DUMP"
             exit 1
           fi
 
           if grep -Eiq 'android:testOnly' "$MANIFEST_DUMP"; then
-            echo "android:testOnly is present but is not true:"
+            echo "android:testOnly exists but is not true:"
             grep -Ein 'android:testOnly' "$MANIFEST_DUMP" || true
           else
             echo "android:testOnly is absent; Android default is false."
           fi
 
           rm -f "$MANIFEST_DUMP"
+
           echo "TEST-ONLY CHECK: OK"
 
+          # ------------------------------------------
+          # Verify native ABI
+          # ------------------------------------------
           echo ""
           echo "========== NATIVE ABI CHECK =========="
 
@@ -254,28 +456,41 @@ jobs:
 
           printf '%s\n' "${ABIS[@]}"
 
-          if ! printf '%s\n' "${ABIS[@]}" | grep -Fxq "arm64-v8a"; then
-            echo "::error::ARM64 native libraries not found."
+          if ! printf '%s\n' "${ABIS[@]}" |
+            grep -Fxq "arm64-v8a"; then
+
+            echo "::error::ARM64 libraries not found."
             exit 1
           fi
 
           for ABI in "${ABIS[@]}"; do
             if [ "$ABI" != "arm64-v8a" ]; then
-              echo "::error::Unexpected architecture found: $ABI"
+              echo "::error::Unexpected architecture: $ABI"
               exit 1
             fi
           done
 
+          echo "ARM64 ABI CHECK: OK"
+
+          # ------------------------------------------
+          # SHA256
+          # ------------------------------------------
           echo ""
           echo "========== SHA256 =========="
+
           sha256sum "$APK"
 
-          # Export exact APK path for artifact upload
-          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
+          # ------------------------------------------
+          # Export APK path
+          # ------------------------------------------
+          printf 'apk_path=%s\n' "$APK" >> "$GITHUB_OUTPUT"
 
           echo ""
           echo "APK search and verification completed successfully."
 
+      # ==========================================
+      # 8. Upload APK artifact
+      # ==========================================
       - name: Upload Voxa ARM64 APK
         uses: actions/upload-artifact@v4
         with:
