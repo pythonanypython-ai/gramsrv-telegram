@@ -850,7 +850,7 @@ public class LimitReachedBottomSheet extends BottomSheetWithRecyclerListView imp
             if (fromChat.username != null) {
                 link = "@" + fromChat.username;
             } else if (chatFull.exported_invite != null) {
-                link = chatFull.exported_invite.link;
+                link = org.telegram.messenger.VoxaLinks.toVoxaLink(chatFull.exported_invite.link);
             } else {
                 dismiss();
                 return;
@@ -1541,7 +1541,7 @@ public class LimitReachedBottomSheet extends BottomSheetWithRecyclerListView imp
 
     private String getBoostLink() {
         if (boostsStatus != null && !TextUtils.isEmpty(boostsStatus.boost_url)) {
-            return boostsStatus.boost_url;
+            return org.telegram.messenger.VoxaLinks.toVoxaLink(boostsStatus.boost_url);
         }
         return ChannelBoostUtilities.createLink(currentAccount, dialogId);
     }

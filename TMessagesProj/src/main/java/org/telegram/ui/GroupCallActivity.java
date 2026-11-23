@@ -3790,7 +3790,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
                     .setOnShareCallLinkListener(this::openShareConferenceLink)
                     .setOnUsersSelector((video, users) -> {
                         if (call == null || call.call == null) return;
-                        final String link = call.call.invite_link;
+                        final String link = org.telegram.messenger.VoxaLinks.toVoxaLink(call.call.invite_link);
                         final int totalCount = users.size();
                         final AtomicInteger invitedCount = new AtomicInteger(0);
                         final HashSet<Long> restrictedUsers = new HashSet<>();
@@ -6629,7 +6629,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
             if (!TextUtils.isEmpty(username = ChatObject.getPublicUsername(currentChat))) {
                 url = accountInstance.getMessagesController().linkPrefix + "/" + username;
             } else {
-                url = chatFull != null && chatFull.exported_invite != null ? chatFull.exported_invite.link : null;
+                url = chatFull != null && chatFull.exported_invite != null ? org.telegram.messenger.VoxaLinks.toVoxaLink(chatFull.exported_invite.link) : null;
             }
             if (TextUtils.isEmpty(url)) {
                 TLRPC.TL_messages_exportChatInvite req = new TLRPC.TL_messages_exportChatInvite();
@@ -6640,7 +6640,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
                         if (chatFull != null) {
                             chatFull.exported_invite = invite;
                         } else {
-                            openShareAlert(true, null, invite.link, copy);
+                            openShareAlert(true, null, org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link), copy);
                         }
                     }
                 }));
@@ -6659,7 +6659,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
                 accountInstance.getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
                     if (response instanceof TL_phone.exportedGroupCallInvite) {
                         TL_phone.exportedGroupCallInvite invite = (TL_phone.exportedGroupCallInvite) response;
-                        invites[num] = invite.link;
+                        invites[num] = org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link);
                     } else {
                         invites[num] = "";
                     }
@@ -10346,7 +10346,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
             progressDialog.dismiss();
             if (res instanceof TL_phone.exportedGroupCallInvite) {
                 final TL_phone.exportedGroupCallInvite r = (TL_phone.exportedGroupCallInvite) res;
-                CallLogActivity.showCallLinkSheet(getContext(), currentAccount, req.call, r.link, resourcesProvider, false, call != null && call.call != null && call.call.creator);
+                CallLogActivity.showCallLinkSheet(getContext(), currentAccount, req.call, org.telegram.messenger.VoxaLinks.toVoxaLink(r.link), resourcesProvider, false, call != null && call.call != null && call.call.creator);
             } else if (err != null) {
                 BulletinFactory.of(topBulletinContainer, new DarkBlueThemeResourcesProvider())
                     .showForError(err);

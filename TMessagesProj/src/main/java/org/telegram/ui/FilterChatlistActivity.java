@@ -964,7 +964,7 @@ public class FilterChatlistActivity extends BaseFragment {
             spoilerTextView = new SimpleTextView(context);
             spoilerTextView.setTextSize(16);
             spoilerTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-            SpannableString spoileredText = new SpannableString("t.me/folder/N3k/dImA/bIo");
+            SpannableString spoileredText = new SpannableString("voxa.ir/folder/N3k/dImA/bIo");
             TextStyleSpan.TextStyleRun run = new TextStyleSpan.TextStyleRun();
             run.flags |= FLAG_STYLE_SPOILER;
             spoileredText.setSpan(new TextStyleSpan(run), 0, spoileredText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -1074,6 +1074,7 @@ public class FilterChatlistActivity extends BaseFragment {
         private float changeAlpha;
         private ValueAnimator changeAnimator;
         public void setLink(String _url, boolean animated) {
+            _url = org.telegram.messenger.VoxaLinks.toVoxaLink(_url);
             lastUrl = _url;
             if (_url != null) {
                 if (_url.startsWith("http://"))

@@ -306,7 +306,8 @@ public class BusinessLinksController {
     public TL_account.TL_businessChatLink findLink(String slug) {
         for (int i = 0; i < links.size(); i++) {
             TL_account.TL_businessChatLink chatLink = links.get(i);
-            if (TextUtils.equals(chatLink.link, slug) ||
+            if (TextUtils.equals(org.telegram.messenger.VoxaLinks.toVoxaLink(chatLink.link), org.telegram.messenger.VoxaLinks.toVoxaLink(slug)) ||
+                    TextUtils.equals(chatLink.link, slug) ||
                     TextUtils.equals(chatLink.link, "https://" + slug) ||
                     TextUtils.equals(chatLink.link, "https://telesrv.net/m/" + slug) ||
                     TextUtils.equals(chatLink.link, "tg://message?slug=" + slug)) {

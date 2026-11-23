@@ -393,14 +393,14 @@ public class BusinessLinksActivity extends UniversalFragment implements Notifica
 
             ItemOptions options = ItemOptions.makeOptions(this, view);
             options.add(R.drawable.msg_copy, getString(R.string.Copy), () -> {
-                AndroidUtilities.addToClipboard(link.link);
+                AndroidUtilities.addToClipboard(org.telegram.messenger.VoxaLinks.toVoxaLink(link.link));
                 BulletinFactory.of(LaunchActivity.getLastFragment()).createCopyLinkBulletin().show();
             });
             options.add(R.drawable.msg_share, getString(R.string.LinkActionShare), () -> {
                 Intent intent = new Intent(getContext(), LaunchActivity.class);
                 intent.setAction(Intent.ACTION_SEND);
                 intent.setType("text/plain");
-                intent.putExtra(Intent.EXTRA_TEXT, link.link);
+                intent.putExtra(Intent.EXTRA_TEXT, org.telegram.messenger.VoxaLinks.toVoxaLink(link.link));
                 startActivityForResult(intent, 500);
             });
             options.add(R.drawable.msg_edit, getString(R.string.Rename), () -> {
@@ -496,7 +496,7 @@ public class BusinessLinksActivity extends UniversalFragment implements Notifica
             imageView.setBackground(Theme.createCircleDrawable(dp(36), Theme.getColor(Theme.key_featuredStickers_addButton)));
             imageView.setOnClickListener(view -> {
                 if (businessLink != null) {
-                    AndroidUtilities.addToClipboard(businessLink.link);
+                    AndroidUtilities.addToClipboard(org.telegram.messenger.VoxaLinks.toVoxaLink(businessLink.link));
                     BulletinFactory.of(LaunchActivity.getLastFragment()).createCopyLinkBulletin().show();
                 }
             });
@@ -533,7 +533,7 @@ public class BusinessLinksActivity extends UniversalFragment implements Notifica
             if (!TextUtils.isEmpty(businessLink.title)) {
                 titleTextView.setText(businessLink.title);
             } else {
-                titleTextView.setText(BusinessLinksController.stripHttps(businessLink.link));
+                titleTextView.setText(BusinessLinksController.stripHttps(org.telegram.messenger.VoxaLinks.toVoxaLink(businessLink.link)));
             }
 
             CharSequence text = new SpannableStringBuilder(businessLink.message);

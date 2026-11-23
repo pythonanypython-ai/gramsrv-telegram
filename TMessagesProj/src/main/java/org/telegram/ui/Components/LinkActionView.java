@@ -426,6 +426,7 @@ public class LinkActionView extends LinearLayout {
 
 
     public void setLink(String link) {
+        link = org.telegram.messenger.VoxaLinks.toVoxaLink(link);
         this.link = link;
         if (link == null) {
             linkView.setText(LocaleController.getString(R.string.Loading));

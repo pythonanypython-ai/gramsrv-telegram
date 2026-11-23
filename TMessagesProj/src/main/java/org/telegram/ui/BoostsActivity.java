@@ -401,7 +401,7 @@ public class BoostsActivity extends GradientHeaderActivity implements Notificati
             }
 
             items.add(new ItemInternal(HEADER_VIEW_TYPE, LocaleController.getString(R.string.LinkForBoosting)));
-            items.add(new ItemInternal(LINK_VIEW_TYPE, boostsStatus.boost_url));
+            items.add(new ItemInternal(LINK_VIEW_TYPE, org.telegram.messenger.VoxaLinks.toVoxaLink(boostsStatus.boost_url)));
             if (MessagesController.getInstance(currentAccount).giveawayGiftsPurchaseAvailable && ChatObject.hasAdminRights(currentChat)) {
                 items.add(new ItemInternal(DIVIDER_TEXT_VIEW_TYPE, LocaleController.getString(isChannel() ? R.string.BoostingShareThisLink : R.string.BoostingShareThisLinkGroup)));
                 items.add(new ItemInternal(SHOW_BOOST_BY_GIFTS, true));

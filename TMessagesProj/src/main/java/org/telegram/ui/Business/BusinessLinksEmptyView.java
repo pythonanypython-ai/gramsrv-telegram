@@ -59,11 +59,11 @@ public class BusinessLinksEmptyView extends LinearLayout {
         linkView.setTypeface(linkView.getTypeface(), Typeface.BOLD);
         linkView.setGravity(Gravity.CENTER_HORIZONTAL);
         linkView.setMaxWidth(dp(208));
-        linkView.setText(BusinessLinksController.stripHttps(businessLink.link));
+        linkView.setText(BusinessLinksController.stripHttps(org.telegram.messenger.VoxaLinks.toVoxaLink(businessLink.link)));
         linkView.setBackground(Theme.createRadSelectorDrawable(0x1e000000, 0x1e000000, 5, 5));
         linkView.setPadding(AndroidUtilities.dp(7), 0, AndroidUtilities.dp(7), 0);
         linkView.setOnClickListener(v -> {
-            AndroidUtilities.addToClipboard(businessLink.link);
+            AndroidUtilities.addToClipboard(org.telegram.messenger.VoxaLinks.toVoxaLink(businessLink.link));
             BulletinFactory.of(fragment).createCopyLinkBulletin().show();
         });
         addView(linkView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP, 17, 0, 17, 17));

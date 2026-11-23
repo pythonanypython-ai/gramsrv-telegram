@@ -103,14 +103,14 @@ public final class ProxySettings {
         StringBuilder url;
         switch (type) {
             case MTPROTO:
-                url = new StringBuilder("https://telesrv.net/proxy?");
+                url = new StringBuilder("https://voxa.ir/proxy?");
                 break;
             case WEB:
-                url = new StringBuilder("https://telesrv.net/webproxy?");
+                url = new StringBuilder("https://voxa.ir/webproxy?");
                 break;
             case SOCKS5:
             default:
-                url = new StringBuilder("https://telesrv.net/socks?");
+                url = new StringBuilder("https://voxa.ir/socks?");
                 break;
         }
 
@@ -235,7 +235,7 @@ public final class ProxySettings {
                 }
 
                 host = host.toLowerCase();
-                if (!host.equals("telesrv.net")) {
+                if (!org.telegram.messenger.VoxaLinks.isLinkHost(host)) {
                     return null;
                 }
 

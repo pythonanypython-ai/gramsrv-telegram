@@ -171,7 +171,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
                     if (chat != null && !TextUtils.isEmpty(username = ChatObject.getPublicUsername(chat))) {
                         link = "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/" + username;
                     } else if (chatInfo != null &&  chatInfo.exported_invite != null) {
-                        link = chatInfo.exported_invite.link;
+                        link = org.telegram.messenger.VoxaLinks.toVoxaLink(chatInfo.exported_invite.link);
                     } else {
                         generateLink();
                     }
@@ -1292,7 +1292,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
                     return;
                 }
                 android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                android.content.ClipData clip = android.content.ClipData.newPlainText("label", invite.link);
+                android.content.ClipData clip = android.content.ClipData.newPlainText("label", org.telegram.messenger.VoxaLinks.toVoxaLink(invite.link));
                 clipboard.setPrimaryClip(clip);
                 BulletinFactory.createCopyLinkBulletin(parentFragment).show();
                 dismiss();

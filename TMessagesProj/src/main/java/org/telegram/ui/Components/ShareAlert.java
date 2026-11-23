@@ -3833,7 +3833,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             link = linkToCopy[switchView.currentTab];
         } else {
             if (exportedMessageLink != null) {
-                link = exportedMessageLink.link;
+                link = org.telegram.messenger.VoxaLinks.toVoxaLink(exportedMessageLink.link);
             }
             if (link == null) {
                 link = linkToCopy[0];
@@ -3849,7 +3849,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         if (link == null) {
             return "";
         }
-        return link;
+        return org.telegram.messenger.VoxaLinks.toVoxaLink(link);
     }
 
     private void updateLinkTextView() {

@@ -391,7 +391,7 @@ public class CreateBotAlert {
                                     ),
                                     () -> {
                                         sheet.dismiss();
-                                        Browser.openUrl(context, "https://telesrv.net/BotFather?start=deletebot");
+                                        Browser.openUrl(context, "https://voxa.ir/BotFather?start=deletebot");
                                     },
                                     resourcesProvider
                                 )
