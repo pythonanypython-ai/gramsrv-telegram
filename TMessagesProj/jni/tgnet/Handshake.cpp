@@ -325,7 +325,7 @@ void Handshake::cleanupServerKeys() {
 }
 
 void Handshake::processHandshakeResponse(TLObject *message, int64_t messageId) {
-    if (handshakeState == 0) {
+    if (message == nullptr || handshakeState == 0) {
         return;
     }
     const std::type_info &typeInfo = typeid(*message);
@@ -346,6 +346,12 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
 
     handshakeState = 2;
     auto result = (TL_resPQ *) message;
+    if (result == nullptr || authNonce == nullptr || result->nonce == nullptr || result->server_nonce == nullptr) {
+        if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: incomplete resPQ response, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
+        beginHandshake(false);
+        return;
+    }
+
     if (authNonce->isEqualTo(result->nonce.get())) {
         std::string key = "";
         int64_t keyFingerprint = 0;
@@ -363,6 +369,7 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
             }
         } else {
             if (serverPublicKeys.empty()) {
+                // Official Telegram server key (kept for standard Telegram DCs).
                 serverPublicKeys.emplace_back("-----BEGIN RSA PUBLIC KEY-----\n"
                                               "MIIBCgKCAQEAxF//0M0+/5PzgdNagTX+J+dJgr75ZCTuiG8i4x7YwmJF+jiOGCjm\n"
                                               "7X7BLCaMc1+hOZYDL3+Gvle/AKykW1qouaCJMVx/H+2l8LFXLelZ2PLawTb8A7Bl\n"
@@ -372,6 +379,18 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
                                               "j1uSSrsY4qN7twxbTad9zdGZ7ys+9v+PuQIDAQAB\n"
                                               "-----END RSA PUBLIC KEY-----");
                 serverPublicKeysFingerprints.push_back(0x9bb3d2f1300f7446);
+
+                // Gramsrv server key. Fingerprint is SHA1(TL-bytes(modulus) + TL-bytes(exponent)),
+                // taking the last eight SHA1 bytes in little-endian order.
+                serverPublicKeys.emplace_back("-----BEGIN RSA PUBLIC KEY-----\n"
+                                              "MIIBCgKCAQEAxRAyF6c7Lu9VSwD96KYaAlEbuFy6QlxHzh70Xq0vYw+vL2ujDAdb\n"
+                                              "J7MT8X+4XokqncxXJj5jg5dRXt1UcXZP+NLRhTveyACNhSVpOJJPZM2ZZqvFBUW8\n"
+                                              "4n6q/qxEvsae11qTYrr7KWPXScv4vdN6DMb3LvP3xOPHXCD66QbVo3A/7EqeACAr\n"
+                                              "opvGLxoMxIz46vJz5T5+C+/5tkTiwlLWWVsk4v1QpU1q8Cbjnu0iKe3tOE7T80it\n"
+                                              "hTgGZ5aFQ9Wju5sJfBatFqyAFOfDJFkQBaMZQJe2nrI+c57dumbsNmo3XFupFtLi\n"
+                                              "Rg2SS/JaluCI8OKiGa6zLdBFRZxaImC2UQIDAQAB\n"
+                                              "-----END RSA PUBLIC KEY-----");
+                serverPublicKeysFingerprints.push_back(0x55DA83FA556488E9ULL);
             }
 
             size_t count2 = serverPublicKeysFingerprints.size();
@@ -488,9 +507,38 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
         delete innerData;
 
         BIO *keyBio = BIO_new(BIO_s_mem());
-        BIO_write(keyBio, key.c_str(), (int) key.length());
+        if (keyBio == nullptr || BIO_write(keyBio, key.c_str(), (int) key.length()) <= 0) {
+            if (keyBio != nullptr) {
+                BIO_free(keyBio);
+            }
+            if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: cannot prepare server RSA public key, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
+            innerDataBuffer->reuse();
+            delete request;
+            beginHandshake(false);
+            return;
+        }
+
         RSA *rsaKey = PEM_read_bio_RSAPublicKey(keyBio, nullptr, nullptr, nullptr);
         BIO_free(keyBio);
+        if (rsaKey == nullptr) {
+            if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: cannot parse server RSA public key, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
+            innerDataBuffer->reuse();
+            delete request;
+            beginHandshake(false);
+            return;
+        }
+
+        const BIGNUM *rsaModulus = nullptr;
+        const BIGNUM *rsaExponent = nullptr;
+        RSA_get0_key(rsaKey, &rsaModulus, &rsaExponent, nullptr);
+        if (rsaModulus == nullptr || rsaExponent == nullptr || BN_num_bits(rsaModulus) != 2048) {
+            if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: invalid server RSA public key, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
+            RSA_free(rsaKey);
+            innerDataBuffer->reuse();
+            delete request;
+            beginHandshake(false);
+            return;
+        }
 
         while (true) {
             RAND_bytes(innerDataBuffer->bytes() + encryptedDataSize + innerDataSize, additionalSize);
@@ -569,6 +617,11 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
 }
 
 void Handshake::processHandshakeResponse_serverDHParams(TLObject *message, int64_t messageId) {
+    if (message == nullptr || authNonce == nullptr || authServerNonce == nullptr || authNewNonce == nullptr) {
+        if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: incomplete DH handshake state, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
+        beginHandshake(false);
+        return;
+    }
     const std::type_info &typeInfo = typeid(*message);
     if (typeInfo == typeid(TL_server_DH_params_ok)) {
         if (handshakeState != 2) {
@@ -790,11 +843,30 @@ void Handshake::processHandshakeResponse_serverDHParamsAnswer(TLObject *message,
         sendAckRequest(messageId);
         return;
     }
+    if (message == nullptr || authNonce == nullptr || authServerNonce == nullptr || authNewNonce == nullptr || handshakeAuthKey == nullptr) {
+        if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: incomplete DH answer state, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
+        beginHandshake(false);
+        return;
+    }
     const std::type_info &typeInfo = typeid(*message);
 
     handshakeState = 4;
 
     Set_client_DH_params_answer *result = (Set_client_DH_params_answer *) message;
+    if (result == nullptr || result->nonce == nullptr || result->server_nonce == nullptr) {
+        if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: incomplete DH answer, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
+        beginHandshake(false);
+        return;
+    }
+
+    if ((typeInfo == typeid(TL_dh_gen_ok) && result->new_nonce_hash1 == nullptr) ||
+        (typeInfo == typeid(TL_dh_gen_retry) && result->new_nonce_hash2 == nullptr) ||
+        (typeInfo == typeid(TL_dh_gen_fail) && result->new_nonce_hash3 == nullptr) ||
+        (typeInfo != typeid(TL_dh_gen_ok) && typeInfo != typeid(TL_dh_gen_retry) && typeInfo != typeid(TL_dh_gen_fail))) {
+        if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: invalid DH answer payload, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
+        beginHandshake(false);
+        return;
+    }
 
     if (!authNonce->isEqualTo(result->nonce.get())) {
         if (LOGS_ENABLED) DEBUG_E("account%u dc%u handshake: invalid DH answer nonce, type = %d", currentDatacenter->instanceNum, currentDatacenter->datacenterId, handshakeType);
