@@ -1827,7 +1827,7 @@ void ConnectionsManager::initDatacenters() {
     }
 
     std::vector<TcpAddress> localAddresses;
-    localAddresses.push_back(TcpAddress("10.172.61.102", 2398, TcpAddressFlagStatic, ""));
+    localAddresses.push_back(TcpAddress("185.26.33.188", 2398, TcpAddressFlagStatic, ""));
     datacenter->replaceAddresses(localAddresses, 0);
 }
 
